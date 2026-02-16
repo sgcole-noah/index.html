@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stumble Cole | Tournament & Match Dashboard</title>
+    <style>
+        :root {
+            --discord: #5865F2;
+            --bg: #0f1011;
+            --card: #1b1c1e;
+            --text: #ffffff;
+            --success: #23a559;
+            --warning: #f1c40f;
+            --danger: #f23f43;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: auto;
+        }
+
+        .header {
+            text-align: center;
+            padding: 40px 0;
+            background: linear-gradient(180deg, #1b1c1e 0%, #0f1011 100%);
+            border-radius: 15px;
+            margin-bottom: 30px;
+            border: 1px solid #333;
+        }
+
+        h1 { margin: 0; color: var(--discord); text-transform: uppercase; letter-spacing: 2px; }
+        .status-bar { font-size: 0.9rem; color: #888; margin-top: 10px; }
+
+        h2 {
+            border-left: 4px solid var(--discord);
+            padding-left: 15px;
+            margin-top: 40px;
+            margin-bottom: 20px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        /* Card Styling */
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            border: 1px solid #333;
+            padding: 20px;
+            transition: transform 0.2s, border-color 0.2s;
+            position: relative;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: var(--discord);
+        }
+
+        .badge {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+
+        .badge-active { background: var(--success); }
+        .badge-match { background: var(--warning); color: black; }
+
+        /* Match-spezifisches Styling */
+        .match-vs {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            background: #121212;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .player-name { font-weight: bold; font-size: 1.1rem; }
+        .vs-circle {
+            background: var(--discord);
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+
+        .btn-join {
+            width: 100%;
+            padding: 12px;
+            background: var(--discord);
+            border: none;
+            color: white;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .btn-join:hover { opacity: 0.8; }
+
+        .loading { text-align: center; color: #666; padding: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>🏆 Stumble Cole Dashboard</h1>
+        <div class="status-bar">Backend: <span id="api-status">Connecting...</span></div>
+    </div>
+
+    <h2>Aktive Turniere</h2>
+    <div id="tournament-list" class="grid">
+        <p class="loading">Lade Turniere...</p>
+    </div>
+
+    <h2>⚔️ Live Matches</h2>
+    <div id="match-container" class="grid">
+        <p class="loading">Suche nach Duellen...</p>
+    </div>
+</div>
+
+<script>
+    const API_BASE = 'https://bckcole-production-0afb.up.railway.app';
+
+    // FUNKTION: Turniere laden
+    async function updateDashboard() {
+        const tourList = document.getElementById('tournament-list');
+        const statusText = document.getElementById('api-status');
+
+        try {
+            const res = await fetch(`${API_BASE}/tournament/active`);
+            const data = await res.json();
+
+            if (data.success) {
+                statusText.innerText = "ONLINE";
+                statusText.style.color = "var(--success)";
+
+                if (data.tournaments.length === 0) {
+                    tourList.innerHTML = "<p>Keine aktiven Turniere vorhanden.</p>";
+                    return;
+                }
+
+                tourList.innerHTML = data.tournaments.map(t => `
+                    <div class="card">
+                        <span class="badge badge-active">Aktiv</span>
+                        <h3 style="margin-top:0">${t.name || 'Tournament'}</h3>
+                        <p style="color:#888; font-size:0.8rem">ID: #${t.id.slice(0,8)}</p>
+                        <div style="margin: 15px 0;">
+                            <div>🎮 Spiel: ${t.game || 'Stumble Born'}</div>
+                            <div>👥 Spieler: ${t.players ? t.players.length : 0} / ${t.maxParticipants || '∞'}</div>
+                        </div>
+                        <button class="btn-join" onclick="joinTournament('${t.id}')">Anmelden</button>
+                    </div>
+                `).join('');
+            }
+        } catch (err) {
+            statusText.innerText = "OFFLINE";
+            statusText.style.color = "var(--danger)";
+            console.error("Fehler Turniere:", err);
+        }
+    }
+
+    // FUNKTION: Matches laden
+    async function updateMatches() {
+        const matchContainer = document.getElementById('match-container');
+        
+        try {
+            const res = await fetch(`${API_BASE}/tournament/active`);
+            const data = await res.json();
+
+            if (!data.success) return;
+
+            let matchesHtml = "";
+
+            data.tournaments.forEach(tour => {
+                if (tour.matches && tour.matches.length > 0) {
+                    tour.matches.forEach(match => {
+                        matchesHtml += `
+                            <div class="card" style="border-left: 4px solid var(--warning)">
+                                <span class="badge badge-match">Live</span>
+                                <div style="font-size:0.75rem; color:#888">Turnier: ${tour.name}</div>
+                                
+                                <div class="match-vs">
+                                    <div class="player-name">${match.player1?.username || 'TBD'}</div>
+                                    <div class="vs-circle">VS</div>
+                                    <div class="player-name">${match.player2?.username || 'TBD'}</div>
+                                </div>
+
+                                <div style="text-align:center; font-size:0.9rem">
+                                    Status: <span style="color:var(--warning)">${match.winner ? 'Gewonnen: ' + match.winner.username : 'Wird gespielt...'}</span>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+            });
+
+            matchContainer.innerHTML = matchesHtml || "<p>Momentan keine laufenden Matches.</p>";
+
+        } catch (err) {
+            console.error("Fehler Matches:", err);
+        }
+    }
+
+    // FUNKTION: Anmeldung
+    async function joinTournament(id) {
+        const userId = prompt("Bitte gib deine MongoDB User-ID ein:");
+        if (!userId) return;
+
+        try {
+            const res = await fetch(`${API_BASE}/tournament/${id}/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: userId })
+            });
+            const result = await res.json();
+            alert(result.success ? "Erfolgreich angemeldet!" : "Fehler: " + result.error);
+            updateDashboard();
+        } catch (e) {
+            alert("Verbindungsfehler!");
+        }
+    }
+
+    // Intervalle starten
+    updateDashboard();
+    updateMatches();
+    setInterval(updateDashboard, 20000);
+    setInterval(updateMatches, 10000);
+</script>
+
+</body>
+</html>
